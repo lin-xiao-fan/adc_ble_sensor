@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "gatt.h": "c",
+        "hci.h": "c",
+        "nrf_saadc.h": "c",
+        "printk.h": "c",
+        "kernel.h": "c",
+        "adc_sensor.h": "c"
+    }
+}
