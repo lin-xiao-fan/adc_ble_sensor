@@ -17,7 +17,7 @@
 #define ADC_REFERENCE        ADC_REF_INTERNAL
 #define ADC_ACQUISITION      ADC_ACQ_TIME_DEFAULT
 #define PACKET_SIZE          6
-#define ADC_CHANNEL_COUNT    6         // ADC通道數量
+#define ADC_CHANNEL_COUNT    8         // ADC通道數量
 
 // 取得 ADC 裝置物件指標
 static const struct device *adc_dev = DEVICE_DT_GET(DT_NODELABEL(adc));
@@ -31,18 +31,20 @@ static struct adc_channel_cfg adc_cfgs[ADC_CHANNEL_COUNT];
 // ADC 讀取序列結構陣列
 static struct adc_sequence adc_sequences[ADC_CHANNEL_COUNT];
 
-// ADC 對應的硬體腳位 (nRF SAADC輸入腳位)
+// ADC 對應的硬體腳位 (nRF SAADC輸入腳位)                           三個裝置的不同按鈕對應的腳位
 static const nrf_saadc_input_t adc_inputs[ADC_CHANNEL_COUNT] = {
-    NRF_SAADC_INPUT_AIN0, // channel 0: P0.02 (玩具按鈕 1)
-    NRF_SAADC_INPUT_AIN1, // channel 1: P0.03 (玩具按鈕 2)
-    NRF_SAADC_INPUT_AIN7, // channel 2: P0.31 (玩具按鈕 3)
-    NRF_SAADC_INPUT_AIN6, // channel 3: P0.30 (玩具按鈕 4)
-    NRF_SAADC_INPUT_AIN5, // channel 4: P0.29 (TV 按鈕 1)
-    NRF_SAADC_INPUT_AIN4  // channel 5: P0.28 (TV 按鈕 2)
+    NRF_SAADC_INPUT_AIN0, // channel 0: P0.02 (玩具按鈕 ToyRF_ON ) (TV 按鈕 TV_left ) (GSI儀器按鈕 channel1)
+    NRF_SAADC_INPUT_AIN1, // channel 1: P0.03 (玩具按鈕 ToyRF_OFF) (TV 按鈕 TV_right) (GSI儀器按鈕 left)
+    NRF_SAADC_INPUT_AIN7, // channel 2: P0.31 (玩具按鈕 ToyRS_ON )                    (GSI儀器按鈕 right)
+    NRF_SAADC_INPUT_AIN6, // channel 3: P0.30 (玩具按鈕 ToyRS_OFF)                    (GSI儀器按鈕 left&right)
+    NRF_SAADC_INPUT_AIN5, // channel 4: P0.29 (玩具按鈕 ToyLF_ON )
+    NRF_SAADC_INPUT_AIN4, // channel 5: P0.28 (玩具按鈕 ToyLF_OFF)
+    NRF_SAADC_INPUT_AIN3, // channel 6: P0.05 (玩具按鈕 ToyLS_ON )
+    NRF_SAADC_INPUT_AIN2  // channel 7: P0.04 (玩具按鈕 ToyLS_OFF)
 };
 
 // 紀錄 TV 按鈕(4與5)是否處於按下狀態，避免連續重複觸發
-static bool tv_pressed[2] = { false, false };  // [0] 對應按鈕4，[1] 對應按鈕5
+static bool tv_pressed[2] = { false, false };  // [0] 對應按鈕tv_left，[1] 對應按鈕tv_right
 
 // 紀錄上一次觸發時間(毫秒)，用於去彈跳判斷
 static uint32_t last_trigger_time = 0;
@@ -97,7 +99,7 @@ bool adc_sensor_check_trigger(uint8_t *packet) {
         int16_t value = sample_buffers[i];
 
         // 前4個通道為玩具按鈕，只要超過壓力閾值就判定為按下
-        if (i < 4 && value > PRESSURE_THRESHOLD) {
+        if (i < 6 && value > PRESSURE_THRESHOLD) {
             pressed = i;
             break;
         }
@@ -136,12 +138,129 @@ bool adc_sensor_check_trigger(uint8_t *packet) {
     packet[1] = (now >> 8) & 0xFF;      // 事件時間中位
     packet[2] = now & 0xFF;             // 事件時間低位
     packet[3] = (uint8_t)pressed;       // 按鈕編號
-    packet[4] = 0x00;                   // toy = 0, GSI = 1 (目前固定0)
-    // 第5格表示 TV 按鈕開關狀態：0=關，1=開（非放開狀態才是開）
-    packet[5] = ((pressed == 4 || pressed == 5) && !is_tv_release) ? 0x01 : 0x00;
+    packet[4] = 0x01;                   // toy = 0, GSI = 1 (目前固定0)
+    // 第5格表示 按鈕開關狀態：0=關，1=開（非放開狀態才是開）
+
+    packet[5] = 0x01 ;
+
+    
 
     return true;
 }
+
+
+
+bool adc_check_toy(uint8_t *packet) {
+    uint32_t now = ble_get_time_since_connected();
+
+    for (int i = 0; i < 8; ++i) {
+        if (adc_read(adc_dev, &adc_sequences[i]) != 0) continue;
+
+        int16_t value = sample_buffers[i];
+        if (value > PRESSURE_THRESHOLD) {
+            if (now - last_trigger_time < DEBOUNCE_INTERVAL_MS) return false;
+
+            last_trigger_time = now;
+            //前三位元是時間
+            packet[0] = (now >> 16) & 0xFF;
+            packet[1] = (now >> 8) & 0xFF;
+            packet[2] = now & 0xFF;
+            //第四個位元是裝置編號 toy = 0 , tv = 1 , gsi = 2 
+            packet[3] = 0x00;        // toy 裝置
+            //第五個位元是按鈕編號 玩具部分有4組 ToyRS = 0 ,ToyRF = 1 ,ToyLS = 2 ,ToyLF = 3
+            packet[4] = i/2 ;        // 按鈕四組 0-1, 2-3, 4-5, 6-7 每兩個是一組，所以使用/2來區分
+            //第六個位元是開關編號  0 = off, 1 = on
+            packet[5] = 1 - ( i%2 ); // 依照順序應該是 on off on off ... 所以1-(2餘數) 可以得出 1 0 1 0 ...的結果
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+bool adc_check_tv(uint8_t *packet) {
+    uint32_t now = ble_get_time_since_connected();
+
+    for (int i = 0; i <= 1; ++i) {
+        if (adc_read(adc_dev, &adc_sequences[i]) != 0) continue;
+
+        int16_t value = sample_buffers[i];
+        int group = i ;  // 0 or 1
+
+        if (value > TV_THRESHOLD) {
+            // 按鈕從未按下狀態 → 按下
+            if (!tv_pressed[group]) {
+                if (now - last_trigger_time < DEBOUNCE_INTERVAL_MS) return false;
+                last_trigger_time = now;
+
+                tv_pressed[group] = true;
+
+                packet[0] = (now >> 16) & 0xFF;
+                packet[1] = (now >> 8) & 0xFF;
+                packet[2] = now & 0xFF;
+                packet[3] = 0x01;      // TV 裝置代號
+                packet[4] = group;     // 0 or 1
+                packet[5] = 0x01;      // on
+
+                return true;
+            }
+        } else {
+            // 按鈕從按下狀態 → 放開
+            if (tv_pressed[group]) {
+                if (now - last_trigger_time < DEBOUNCE_INTERVAL_MS) return false;
+                last_trigger_time = now;
+
+                tv_pressed[group] = false;
+
+                packet[0] = (now >> 16) & 0xFF;
+                packet[1] = (now >> 8) & 0xFF;
+                packet[2] = now & 0xFF;
+                packet[3] = 0x01;      // TV 裝置代號
+                packet[4] = group;     // 0 or 1
+                packet[5] = 0x00;      // off
+
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+
+bool adc_check_gsi(uint8_t *packet) {
+    uint32_t now = ble_get_time_since_connected();
+
+    for (int i = 0; i <= 3; ++i) {
+        if (adc_read(adc_dev, &adc_sequences[i]) != 0) continue;
+
+        int16_t value = sample_buffers[i];
+        if (value > PRESSURE_THRESHOLD) {
+            if (now - last_trigger_time < DEBOUNCE_INTERVAL_MS) return false;
+
+            last_trigger_time = now;
+            //前三位元是時間
+            packet[0] = (now >> 16) & 0xFF;
+            packet[1] = (now >> 8) & 0xFF;
+            packet[2] = now & 0xFF;
+            //第四個位元是裝置編號 toy = 0 , tv = 1 , gsi = 2 
+            packet[3] = 0x02;        // gsi 裝置
+            //第五個位元是按鈕編號 gsi部分有4組 channel1 = 0 ,left = 1 ,right = 2 ,left&right = 3
+            packet[4] = i ;        // 按鈕編號
+            //第六個位元是開關編號  0 = off, 1 = on
+            packet[5] = 0x00; // GSI 開關目前無意義
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+
 
 // 讀取指定感測器 ADC 數值
 int16_t adc_sensor_get_value(int sensor_id) {
