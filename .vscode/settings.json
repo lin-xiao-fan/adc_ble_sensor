@@ -5,6 +5,7 @@
         "nrf_saadc.h": "c",
         "printk.h": "c",
         "kernel.h": "c",
-        "adc_sensor.h": "c"
+        "adc_sensor.h": "c",
+        "ble_service.h": "c"
     }
 }

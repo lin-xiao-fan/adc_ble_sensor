@@ -10,7 +10,9 @@ void adc_sensor_init(void);
 // 如果有觸發事件，會將事件資訊寫入 packet 陣列中，回傳 true
 // 沒有事件時回傳 false
 bool adc_sensor_check_trigger(uint8_t *packet);
-
+bool adc_check_toy(uint8_t *packet);
+bool adc_check_tv(uint8_t *packet);
+bool adc_check_gsi(uint8_t *packet);
 // 取得指定 sensor (通道) 的 ADC 數值
 // sensor_id 範圍為 0 ~ 5（目前6個通道）
 // 失敗時回傳 -1

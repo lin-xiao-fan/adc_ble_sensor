@@ -17,9 +17,9 @@ int main(void)
     // 主迴圈，持續執行以下動作
     while (1) {
         // 如果有偵測到按鈕觸發，會將事件資料寫入 packet 陣列並回傳 true
-        if ( adc_check_toy(packet)) { // 玩具的韌體用這行
+        //if ( adc_check_toy(packet)) { // 玩具的韌體用這行
         //if ( adc_check_tv(packet)) { // TV的韌體用這行
-        //if ( adc_check_gsi(packet)) { // 儀器的韌體用這行
+        if ( adc_check_gsi(packet)) { // 儀器的韌體用這行
 
             // 有新事件觸發，透過 BLE 傳送通知封包給連線裝置
             ble_send_notify_packet(packet, sizeof(packet));
@@ -28,4 +28,5 @@ int main(void)
         }
         // 休息 100 毫秒，避免過度輪詢導致資源浪費
         k_msleep(100);
-  k_msleep(200);
+    }
+}

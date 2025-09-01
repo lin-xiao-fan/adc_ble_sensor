@@ -33,12 +33,12 @@ static struct adc_sequence adc_sequences[ADC_CHANNEL_COUNT];
 
 // ADC 對應的硬體腳位 (nRF SAADC輸入腳位)                           三個裝置的不同按鈕對應的腳位
 static const nrf_saadc_input_t adc_inputs[ADC_CHANNEL_COUNT] = {
-    NRF_SAADC_INPUT_AIN0, // channel 0: P0.02 (玩具按鈕 ToyRF_ON ) (TV 按鈕 TV_left ) (GSI儀器按鈕 channel1)
-    NRF_SAADC_INPUT_AIN1, // channel 1: P0.03 (玩具按鈕 ToyRF_OFF) (TV 按鈕 TV_right) (GSI儀器按鈕 left)
-    NRF_SAADC_INPUT_AIN7, // channel 2: P0.31 (玩具按鈕 ToyRS_ON )                    (GSI儀器按鈕 right)
-    NRF_SAADC_INPUT_AIN6, // channel 3: P0.30 (玩具按鈕 ToyRS_OFF)                    (GSI儀器按鈕 left&right)
-    NRF_SAADC_INPUT_AIN5, // channel 4: P0.29 (玩具按鈕 ToyLF_ON )
-    NRF_SAADC_INPUT_AIN4, // channel 5: P0.28 (玩具按鈕 ToyLF_OFF)
+    NRF_SAADC_INPUT_AIN0, // channel 0: P0.02 (玩具按鈕 ToyRF_ON ) (TV 按鈕 TV_left ) 
+    NRF_SAADC_INPUT_AIN1, // channel 1: P0.03 (玩具按鈕 ToyRF_OFF) (TV 按鈕 TV_right) 
+    NRF_SAADC_INPUT_AIN7, // channel 2: P0.31 (玩具按鈕 ToyRS_ON )                    (GSI儀器按鈕 channel1)
+    NRF_SAADC_INPUT_AIN6, // channel 3: P0.30 (玩具按鈕 ToyRS_OFF)                    (GSI儀器按鈕 left)
+    NRF_SAADC_INPUT_AIN5, // channel 4: P0.29 (玩具按鈕 ToyLF_ON )                    (GSI儀器按鈕 right)
+    NRF_SAADC_INPUT_AIN4, // channel 5: P0.28 (玩具按鈕 ToyLF_OFF)                    (GSI儀器按鈕 left&right)
     NRF_SAADC_INPUT_AIN3, // channel 6: P0.05 (玩具按鈕 ToyLS_ON )
     NRF_SAADC_INPUT_AIN2  // channel 7: P0.04 (玩具按鈕 ToyLS_OFF)
 };
@@ -233,7 +233,7 @@ bool adc_check_tv(uint8_t *packet) {
 bool adc_check_gsi(uint8_t *packet) {
     uint32_t now = ble_get_time_since_connected();
 
-    for (int i = 0; i <= 3; ++i) {
+    for (int i = 2; i <= 5; ++i) {
         if (adc_read(adc_dev, &adc_sequences[i]) != 0) continue;
 
         int16_t value = sample_buffers[i];
@@ -248,7 +248,7 @@ bool adc_check_gsi(uint8_t *packet) {
             //第四個位元是裝置編號 toy = 0 , tv = 1 , gsi = 2 
             packet[3] = 0x02;        // gsi 裝置
             //第五個位元是按鈕編號 gsi部分有4組 channel1 = 0 ,left = 1 ,right = 2 ,left&right = 3
-            packet[4] = i ;        // 按鈕編號
+            packet[4] = i-2 ;        // 按鈕編號
             //第六個位元是開關編號  0 = off, 1 = on
             packet[5] = 0x00; // GSI 開關目前無意義
 
